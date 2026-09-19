@@ -1,6 +1,6 @@
 import axios from 'axios';
 import {getToken} from '../utils/authStorage';
-const API_URL = 'http://192.168.1.19:8000/api';
+const API_URL = 'https://novaroute-ygmb.onrender.com/api';
 
 export const loginUser = async (
   email: string,
