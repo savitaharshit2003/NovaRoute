@@ -98,6 +98,143 @@
 
 
 
+// import {PermissionsAndroid, Platform} from 'react-native';
+// import Geolocation from '@react-native-community/geolocation';
+
+// export type LocationData = {
+//   latitude: number;
+//   longitude: number;
+//   city: string;
+//   state: string;
+//   country: string;
+// };
+
+// const requestLocationPermission = async (): Promise<boolean> => {
+//   if (Platform.OS !== 'android') {
+//     return true;
+//   }
+
+//   const granted = await PermissionsAndroid.request(
+//     PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+//     {
+//       title: 'Location Permission',
+//       message:
+//         'EVChargeFinder needs your location to find nearby charging stations.',
+//       buttonPositive: 'Allow',
+//       buttonNegative: 'Cancel',
+//       buttonNeutral: 'Ask Me Later',
+//     },
+//   );
+
+//   return granted === PermissionsAndroid.RESULTS.GRANTED;
+// };
+
+// const getPlaceName = async (
+//   latitude: number,
+//   longitude: number,
+// ): Promise<{
+//   city: string;
+//   state: string;
+//   country: string;
+// }> => {
+//   try {
+//     const response = await fetch(
+//       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+//       {
+//         headers: {
+//           Accept: 'application/json',
+//           'User-Agent': 'EVChargeFinder/1.0',
+//         },
+//       },
+//     );
+
+//     if (!response.ok) {
+//       throw new Error('Unable to find place name.');
+//     }
+
+//     const data = await response.json();
+//     const address = data.address || {};
+
+//     console.log('Reverse geocoding address:', address);
+
+//     const city =
+//       address.city ||
+//       address.town ||
+//       address.village ||
+//       address.municipality ||
+//       address.city_district ||
+//       address.suburb ||
+//       address.county ||
+//       address.state_district ||
+//       'Unknown City';
+
+//     return {
+//       city,
+//       state: address.state || '',
+//       country: address.country || '',
+//     };
+//   } catch (error) {
+//     console.log('Reverse geocoding error:', error);
+
+//     return {
+//       city: 'Current Location',
+//       state: '',
+//       country: '',
+//     };
+//   }
+// };
+
+// export const getCurrentLocation = async (): Promise<LocationData> => {
+//   const hasPermission = await requestLocationPermission();
+
+//   if (!hasPermission) {
+//     throw new Error('Location permission denied.');
+//   }
+
+//   return new Promise((resolve, reject) => {
+//     Geolocation.getCurrentPosition(
+//       async position => {
+//         const {latitude, longitude} = position.coords;
+
+//         const place = await getPlaceName(latitude, longitude);
+
+//         resolve({
+//           latitude,
+//           longitude,
+//           city: place.city,
+//           state: place.state,
+//           country: place.country,
+//         });
+//       },
+//       error => {
+//         console.log('Location error:', error);
+
+//         reject(
+//           new Error(
+//             `${error.code}: ${error.message || 'Unable to get location.'}`,
+//           ),
+//         );
+//       },
+//       {
+//         enableHighAccuracy: true,
+//         timeout: 30000,
+//         maximumAge: 60000,
+//       },
+//     );
+//   });
+// };
+
+
+
+
+
+
+
+
+
+
+
+
 import {PermissionsAndroid, Platform} from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
 
@@ -114,19 +251,27 @@ const requestLocationPermission = async (): Promise<boolean> => {
     return true;
   }
 
-  const granted = await PermissionsAndroid.request(
-    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-    {
-      title: 'Location Permission',
-      message:
-        'EVChargeFinder needs your location to find nearby charging stations.',
-      buttonPositive: 'Allow',
-      buttonNegative: 'Cancel',
-      buttonNeutral: 'Ask Me Later',
-    },
-  );
+  try {
+    const permissions = [
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+    ];
 
-  return granted === PermissionsAndroid.RESULTS.GRANTED;
+    const result = await PermissionsAndroid.requestMultiple(permissions);
+
+    const fineGranted =
+      result[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] ===
+      PermissionsAndroid.RESULTS.GRANTED;
+
+    const coarseGranted =
+      result[PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION] ===
+      PermissionsAndroid.RESULTS.GRANTED;
+
+    return fineGranted || coarseGranted;
+  } catch (error) {
+    console.log('Location permission error:', error);
+    return false;
+  }
 };
 
 const getPlaceName = async (
@@ -153,7 +298,7 @@ const getPlaceName = async (
     }
 
     const data = await response.json();
-    const address = data.address || {};
+    const address = data?.address || {};
 
     console.log('Reverse geocoding address:', address);
 
@@ -184,6 +329,36 @@ const getPlaceName = async (
   }
 };
 
+const getPosition = (
+  enableHighAccuracy: boolean,
+  timeout: number,
+  maximumAge: number,
+): Promise<{
+  latitude: number;
+  longitude: number;
+}> => {
+  return new Promise((resolve, reject) => {
+    Geolocation.getCurrentPosition(
+      position => {
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      error => {
+        console.log('Location attempt failed:', error);
+
+        reject(error);
+      },
+      {
+        enableHighAccuracy,
+        timeout,
+        maximumAge,
+      },
+    );
+  });
+};
+
 export const getCurrentLocation = async (): Promise<LocationData> => {
   const hasPermission = await requestLocationPermission();
 
@@ -191,35 +366,55 @@ export const getCurrentLocation = async (): Promise<LocationData> => {
     throw new Error('Location permission denied.');
   }
 
-  return new Promise((resolve, reject) => {
-    Geolocation.getCurrentPosition(
-      async position => {
-        const {latitude, longitude} = position.coords;
+  let coordinates;
 
-        const place = await getPlaceName(latitude, longitude);
-
-        resolve({
-          latitude,
-          longitude,
-          city: place.city,
-          state: place.state,
-          country: place.country,
-        });
-      },
-      error => {
-        console.log('Location error:', error);
-
-        reject(
-          new Error(
-            `${error.code}: ${error.message || 'Unable to get location.'}`,
-          ),
-        );
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 30000,
-        maximumAge: 60000,
-      },
+  try {
+    // First attempt:
+    // Use a recent location if Android already has one.
+    coordinates = await getPosition(
+      false,
+      15000,
+      60000,
     );
-  });
+
+    console.log('Location obtained using normal accuracy.');
+  } catch (firstError) {
+    console.log(
+      'Normal location attempt failed. Trying GPS...',
+      firstError,
+    );
+
+    try {
+      // Second attempt:
+      // Ask Android for a more accurate GPS location.
+      coordinates = await getPosition(
+        true,
+        30000,
+        0,
+      );
+
+      console.log('Location obtained using high accuracy GPS.');
+    } catch (secondError) {
+      console.log(
+        'High accuracy location attempt failed:',
+        secondError,
+      );
+
+      throw new Error(
+        'Unable to get your current location. Please make sure Location/GPS is turned on and try again.',
+      );
+    }
+  }
+
+  const {latitude, longitude} = coordinates;
+
+  const place = await getPlaceName(latitude, longitude);
+
+  return {
+    latitude,
+    longitude,
+    city: place.city,
+    state: place.state,
+    country: place.country,
+  };
 };
