@@ -20,10 +20,11 @@ import typography from '../constants/typography';
 import {moderateScale, normalizeFont} from '../utils/responsive';
 import {loginUser} from '../api/authApi';
 import {saveAuthData} from '../utils/authStorage';
-
+import {useAuth} from '../context/AuthContext';
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 const LoginScreen = ({navigation}: Props) => {
+  const {updateUser} = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -54,20 +55,18 @@ const LoginScreen = ({navigation}: Props) => {
 
     // Check login success
     if (data.success) {
-      console.log('3. Saving auth data');
+  console.log('3. Saving auth data');
 
-      // Save JWT token + user data
-      await saveAuthData(
-        data.token,
-        data.user,
-      );
+  await saveAuthData(
+    data.token,
+    data.user,
+  );
 
-      console.log('4. Auth data saved');
+  console.log('4. Auth data saved');
 
-      // Go to main application
-      // navigation.replace('MainTabs');
+  updateUser(data.user);
 
-      console.log('5. Navigation done');
+  console.log('5. User updated in AuthContext');
     } else {
       Alert.alert(
         'Login Failed',
